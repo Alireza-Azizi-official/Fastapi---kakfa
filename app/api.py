@@ -18,6 +18,11 @@ def get_current_user(x_access_token: str = Header(...)):
     return user
 
 
+@router.get("/", tags=["root"])
+async def root():
+    return {"message": "fastapi + kafka + mongodb is running successfully"}
+
+
 @router.post("/register", tags=["Auth"])
 def register_user(user: UserCreate):
     if users_col.find_one({"username": user.username}):
@@ -58,3 +63,13 @@ def list_cameras(username: str = Depends(get_current_user)):
     return list(
         cameras_col.find({"owner": username}, {"_id": 1, "name": 1, "location": 1})
     )
+
+
+@router.delete('/cameras/{camera_id}', tags=['Cameras'])
+async def  delete_camera(camera_id: str, username: str = Depends(get_current_user)):
+    camera = cameras_col.find_one({"_id": camera_id, "owner": username})
+    if not camera:
+        raise HTTPException(status_code=404, detail="camera not found")
+    cameras_col.delete_one({"_id": camera_id})
+    await kafka_manager.send_event({"event": "camera_deleted", "data": {"_id": camera_id}})
+    return {"message": "camera deleted"}
